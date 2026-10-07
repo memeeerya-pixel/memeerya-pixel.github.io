@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Security Recon Suite v2.0</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: system-ui, sans-serif; background: linear-gradient(135deg,#0b1220,#1e293b); color:#e5e7eb; padding:16px; min-height:100vh; }
+  .container { max-width: 900px; margin: 0 auto; }
+  h1 { text-align:center; font-size:1.6rem; margin-bottom:8px; }
+  .subtitle { text-align:center; color:#94a3b8; margin-bottom:20px; font-size:0.9rem; }
+  .warning { background:#7f1d1d; color:#fecaca; padding:14px; border-radius:12px; margin-bottom:20px; font-size:0.9rem; border-right:4px solid #ef4444; }
+  .card { background:#111827; padding:20px; border-radius:16px; margin-bottom:16px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
+  .input-group { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px; }
+  input { flex:1; min-width:200px; padding:12px; border-radius:10px; border:1px solid #374151; background:#1f2937; color:#fff; font-size:1rem; }
+  .grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap:10px; }
+  button { padding:12px; border-radius:10px; border:0; background:#2563eb; color:#fff; cursor:pointer; font-size:0.95rem; font-weight:500; }
+  button:hover { background:#1d4ed8; }
+  button.payment { background:#dc2626; }
+  .status { padding:10px; border-radius:8px; text-align:center; margin-bottom:12px; font-size:0.9rem; }
+  .status.loading { background:#1e3a8a; color:#bfdbfe; }
+  .status.error { background:#7f1d1d; color:#fecaca; }
+  pre { background:#0f172a; padding:16px; border-radius:12px; white-space:pre-wrap; word-break:break-word; font-size:0.85rem; max-height:500px; overflow-y:auto; direction:ltr; text-align:left; }
+  .tabs { display:flex; gap:4px; margin-bottom:12px; flex-wrap:wrap; }
+  .tab { padding:8px 14px; border-radius:8px; background:#1f2937; cursor:pointer; font-size:0.85rem; }
+  .tab.active { background:#2563eb; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>🛡️ Security Recon Suite v2.0</h1>
+  <p class="subtitle">للمواقع التي تملكها أو لديك إذن كتابي بفحصها</p>
+
+  <div class="warning">
+    ⚠️ <strong>تحذير قانوني:</strong> استخدم هذه الأداة فقط على المواقع التي تملكها أو لديك إذن كتابي بفحصها. الفحص بدون إذن يعاقب عليه القانون.
+  </div>
+
+  <div class="card">
+    <div class="input-group">
+      <input id="domain" placeholder="example.com">
+      <button onclick="scanAll()">فحص شامل</button>
+    </div>
+    <div class="grid">
+      <button onclick="scan('headers')">Headers</button>
+      <button onclick="scan('ssl')">SSL</button>
+      <button onclick="scan('dns')">DNS</button>
+      <button onclick="scan('subdomains')">Subdomains</button>
+      <button onclick="scan('tech')">Tech Detect</button>
+      <button onclick="scan('exposed')">Exposed Files</button>
+      <button onclick="scan('telegram')" style="background:#0891b2">Telegram Bot</button>
+      <button onclick="scan('payment')" class="payment">Payment (Staging)</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div id="status" class="status" style="display:none"></div>
+    <div class="tabs" id="tabs"></div>
+    <pre id="output">النتائج رح تطلع هون...</pre>
+  </div>
+</div>
+
+<script>
+const API = "https://security-recon-backend.onrender.com";
+const API_KEY = "MySuperSecretKey2025";
+
+let results = {};
+
+function setStatus(msg, type='loading') {
+  const el = document.getElementById('status');
+  el.style.display = 'block';
+  el.className = 'status ' + type;
+  el.textContent = msg;
+}
+function hideStatus() { document.getElementById('status').style.display = 'none'; }
+
+function renderTabs() {
+  const tabs = document.getElementById('tabs');
+  tabs.innerHTML = '';
+  Object.keys(results).forEach(k => {
+    const t = document.createElement('div');
+    t.className = 'tab';
+    t.textContent = k;
+    t.onclick = () => {
+      document.getElementById('output').textContent = JSON.stringify(results[k], null, 2);
+      document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+      t.classList.add('active');
+    };
+    tabs.appendChild(t);
+  });
+}
+
+async function callScan(type, payload) {
+  const res = await fetch(`${API}/scan/${type}`, {
+    method: 'POST',
+    headers: {'Content-Type':'application/json', 'x-api-key': API_KEY},
+    body: JSON.stringify(payload)
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(()=>({detail:res.statusText}));
+    throw new Error(err.detail || res.statusText);
+  }
+  return await res.json();
+}
+
+async function scan(type) {
+  const domain = document.getElementById('domain').value.trim();
+  if (!domain) return alert("اكتب الدومين");
+  setStatus(`جاري فحص ${type}...`);
+  try {
+    const data = await callScan(type, {domain});
+    results[type] = data;
+    renderTabs();
+    document.getElementById('output').textContent = JSON.stringify(data, null, 2);
+    setStatus(`✅ خلص فحص ${type}`);
+    setTimeout(hideStatus, 2000);
+  } catch(e) {
+    setStatus('❌ خطأ: ' + e.message, 'error');
+  }
+}
+
+async function scanAll() {
+  const domain = document.getElementById('domain').value.trim();
+  if (!domain) return alert("اكتب الدومين");
+  results = {};
+  renderTabs();
+  for (const t of ['headers','ssl','dns','tech','exposed','subdomains']) {
+    await scan(t);
+  }
+}
+</script>
+</body>
+</html>
