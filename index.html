@@ -101,11 +101,15 @@ function renderTabs(){
 }
 
 async function callScan(type, payload){
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 120000);
   const res = await fetch(`${API}/scan/${type}`, {
     method: 'POST',
     headers: {'Content-Type':'application/json','x-api-key':API_KEY},
-    body: JSON.stringify(payload)
+    body: JSON.stringify(payload),
+    signal: controller.signal
   });
+  clearTimeout(timeoutId);
   if(!res.ok){
     const err = await res.json().catch(()=>({detail:res.statusText}));
     throw new Error(err.detail || res.statusText);
