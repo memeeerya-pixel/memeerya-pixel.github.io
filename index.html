@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Security Recon Suite v3.0</title>
+<title>Security Recon Suite v3.1</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:system-ui,sans-serif;background:linear-gradient(135deg,#0b1220,#1e293b);color:#e5e7eb;padding:16px;min-height:100vh}
@@ -19,6 +19,7 @@ button{padding:12px;border-radius:10px;border:0;background:#2563eb;color:#fff;cu
 button:hover{background:#1d4ed8}
 button.payment{background:#dc2626}
 button.telegram{background:#0891b2}
+button.debug{background:#0891b2;font-size:0.75rem;padding:6px 12px}
 .status{padding:10px;border-radius:8px;text-align:center;margin-bottom:12px;font-size:.9rem}
 .status.loading{background:#1e3a8a;color:#bfdbfe}
 .status.error{background:#7f1d1d;color:#fecaca}
@@ -27,17 +28,19 @@ pre{background:#0f172a;padding:16px;border-radius:12px;white-space:pre-wrap;word
 .tabs{display:flex;gap:4px;margin-bottom:12px;flex-wrap:wrap}
 .tab{padding:8px 12px;border-radius:8px;background:#1f2937;cursor:pointer;font-size:.8rem;display:flex;align-items:center;gap:6px}
 .tab.active{background:#2563eb}
+#debugLog{display:none;background:#0f172a;color:#a7f3d0;padding:12px;border-radius:12px;margin-top:12px;font-size:0.75rem;max-height:300px;overflow-y:auto;direction:ltr;text-align:left;font-family:monospace}
+#debugContent div{padding:3px 0;border-bottom:1px solid #1f2937}
 </style>
 </head>
 <body>
 <div class="container">
-<h1>🛡️ Security Recon Suite v3.0</h1>
+<h1>🛡️ Security Recon Suite v3.1</h1>
 <p class="subtitle">للمواقع التي تملكها أو لديك إذن كتابي بفحصها</p>
 <div class="warning">⚠️ <strong>تحذير قانوني:</strong> استخدم هذه الأداة فقط على المواقع التي تملكها أو لديك إذن كتابي بفحصها. الفحص بدون إذن يعاقب عليه القانون.</div>
 
 <div class="card">
 <div class="input-group">
-<input id="domain" placeholder="example.com">
+<input id="domain" placeholder="example.com/path (اختياري)">
 <button onclick="scanAll()">فحص شامل</button>
 </div>
 <div class="grid">
@@ -62,12 +65,17 @@ pre{background:#0f172a;padding:16px;border-radius:12px;white-space:pre-wrap;word
 <button class="telegram" onclick="scanTelegram()">Telegram Bot</button>
 <button class="payment" onclick="scan('payment')">Payment (Staging)</button>
 </div>
+<button class="debug" onclick="toggleDebug()" style="margin-top:10px;width:100%;">🔍 إظهار/إخفاء Debug Log (Network)</button>
 </div>
 
 <div class="card">
 <div id="status" class="status" style="display:none"></div>
 <div class="tabs" id="tabs"></div>
 <pre id="output">النتائج رح تطلع هون...</pre>
+<div id="debugLog">
+<strong>📡 Network Debug Log:</strong>
+<div id="debugContent"></div>
+</div>
 </div>
 </div>
 
@@ -76,6 +84,42 @@ const API = "https://security-recon-backend.onrender.com";
 const API_KEY = "MySuperSecretKey2025";
 let results = {};
 
+// ============================================================
+// Debug Log: اعتراض كل طلبات fetch
+// ============================================================
+const originalFetch = window.fetch;
+window.fetch = async function(...args) {
+  const [url, options] = args;
+  const method = options?.method || 'GET';
+  const logDiv = document.getElementById('debugContent');
+  const timestamp = new Date().toLocaleTimeString('ar-EG');
+  if (logDiv) {
+    logDiv.innerHTML += `<div>⏱️ [${timestamp}] ➡️ <span style="color:#60a5fa">${method}</span> ${url}</div>`;
+  }
+  try {
+    const response = await originalFetch(...args);
+    const clone = response.clone();
+    let body = '';
+    try { body = await clone.text(); } catch(e) { body = 'تعذر قراءة الرد'; }
+    if (logDiv) {
+      const color = response.status >= 400 ? '#fca5a5' : '#86efac';
+      logDiv.innerHTML += `<div>⬅️ <span style="color:${color}">${response.status}</span> - ${body.substring(0,300)}${body.length > 300 ? '...' : ''}</div>`;
+    }
+    return response;
+  } catch (err) {
+    if (logDiv) {
+      logDiv.innerHTML += `<div style="color:#fca5a5">❌ خطأ: ${err.message}</div>`;
+    }
+    throw err;
+  }
+};
+
+function toggleDebug() {
+  const el = document.getElementById('debugLog');
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
+// ============================================================
 function setStatus(msg, type='loading'){
   const el = document.getElementById('status');
   el.style.display = 'block';
